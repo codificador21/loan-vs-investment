@@ -143,6 +143,7 @@
   .metric-label {
     font-weight: 500;
     color: #6c757d;
+    padding-right: 4px;
   }
   
   .metric-value {

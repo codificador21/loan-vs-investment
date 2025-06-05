@@ -8,7 +8,7 @@ const calculateEMI = (principal: number, rate: number, tenureMonths: number): nu
         return principal / tenureMonths;
     }
     const emi = (principal * monthlyRate * Math.pow(1 + monthlyRate, tenureMonths)) /
-                (Math.pow(1 + monthlyRate, tenureMonths) - 1);
+        (Math.pow(1 + monthlyRate, tenureMonths) - 1);
     return emi;
 };
 
@@ -22,6 +22,22 @@ const calculateFutureValue = (monthlyInvestment: number, cagr: number, years: nu
     const fv = monthlyInvestment * (Math.pow(1 + monthlyRate, months) - 1) / monthlyRate;
     return fv;
 };
+
+const calculateCompoundInterest = (
+    principal: number,
+    annualRate: number,
+    years: number,
+    timesCompoundedPerYear: number = 1
+  ): number => {
+    if (years <= 0 || annualRate <= 0 || principal <= 0) return principal;
+  
+    const ratePerPeriod = annualRate / (100 * timesCompoundedPerYear);
+    const totalPeriods = years * timesCompoundedPerYear;
+  
+    const amount = principal * Math.pow(1 + ratePerPeriod, totalPeriods);
+    return amount;
+  };
+  
 
 const formatCurrency = (amount: number): string => {
     if (amount === Infinity) return "N/A (check inputs)";
@@ -55,6 +71,7 @@ interface ComparisonData {
     investmentResults: InvestmentResult[];
     shorterTenure: number;
     longerTenure: number;
+    remainingPayment: number;
 }
 
 const LoanTermComparisonCalculator: React.FC = () => {
@@ -104,13 +121,15 @@ const LoanTermComparisonCalculator: React.FC = () => {
 
         const emiDifference = emi1 - emi2; // Positive if EMI1 > EMI2 (expected if tenure1 < tenure2)
         const extraInterestCost = totalInterest2 - totalInterest1; // Extra interest paid for longer tenure loan
+        const remainingPayment = emi2*(tenure2Months-tenure1Months);
+        console.log('aaaa',{emi2},{tenure2Months},{tenure1Months})
 
         const cagrs = [10, 11, 12];
         if (!cagrs.includes(userCagr)) { // Add user's CAGR if not already present, and sort
             cagrs.push(userCagr);
             cagrs.sort((a, b) => a - b);
         }
-        
+
         const uniqueCagrs = Array.from(new Set(cagrs)); // Ensure unique values
 
 
@@ -118,15 +137,15 @@ const LoanTermComparisonCalculator: React.FC = () => {
             // Investment happens for the duration of the shorter loan (tenure1Years)
             // using the EMI difference obtained by opting for the longer loan.
             const futureValueShortTerm = calculateFutureValue(emiDifference, cagr, tenure1Years);
-            
+
             // Net benefit: Investment gain over shorter tenure vs extra interest cost of longer loan
             const netBenefit = futureValueShortTerm - extraInterestCost;
 
             let futureValueLongTerm: number | undefined = undefined;
             if (tenure1Years < tenure2Years) {
-                 // Optionally, calculate FV if EMI difference was invested for the full longer tenure.
-                 // This is just for informational purposes, primary comparison uses futureValueShortTerm.
-                 futureValueLongTerm = calculateFutureValue(emiDifference, cagr, tenure2Years);
+                // Optionally, calculate FV if EMI difference was invested for the full longer tenure.
+                // This is just for informational purposes, primary comparison uses futureValueShortTerm.
+                futureValueLongTerm = calculateCompoundInterest(futureValueShortTerm, cagr, tenure2Years-tenure1Years);
             }
 
 
@@ -134,7 +153,8 @@ const LoanTermComparisonCalculator: React.FC = () => {
                 cagr,
                 futureValueShortTerm,
                 futureValueLongTerm,
-                netBenefit
+                netBenefit,
+                remainingPayment
             };
         });
 
@@ -146,6 +166,7 @@ const LoanTermComparisonCalculator: React.FC = () => {
             investmentResults,
             shorterTenure: tenure1Years,
             longerTenure: tenure2Years,
+            remainingPayment
         });
     }, [loanAmount, interestRate, tenure1, tenure2, expectedCagr]);
 
@@ -185,7 +206,7 @@ const LoanTermComparisonCalculator: React.FC = () => {
                 </button>
             </div>
 
-            {results && results.emiDifference >=0 && ( // Only show results if valid and EMI diff is sensible
+            {results && results.emiDifference >= 0 && ( // Only show results if valid and EMI diff is sensible
                 <div id="results" className="results">
                     <div className="loan-option">
                         <h3>🚀 Loan Option 1 ({results.loan1.tenureYears} Years)</h3>
@@ -204,25 +225,33 @@ const LoanTermComparisonCalculator: React.FC = () => {
                     <div className="investment-analysis">
                         <h3>📈 Investment Analysis of EMI Difference</h3>
                         <div className="highlight">
-                            <strong>EMI Difference (Opting for {results.longerTenure}yr loan over {results.shorterTenure}yr loan saves):</strong> {formatCurrency(results.emiDifference)}/month<br />
-                            <strong>Extra Interest Cost (for taking {results.longerTenure}yr loan vs {results.shorterTenure}yr loan):</strong> {formatCurrency(results.extraInterestCost)}<br />
-                            <strong>Analysis:</strong> If you choose the longer {results.longerTenure}-year loan, your EMI is lower. Can investing this monthly EMI difference for {results.shorterTenure} years (the duration of the shorter loan) generate returns that offset the extra interest paid for the {results.longerTenure}-year loan?
+                            <strong>EMI Difference (Opting for {results.longerTenure}yr loan over {results.shorterTenure}yr loan saves):</strong> {formatCurrency(results.emiDifference)}/month<br /> <br />
+                            <strong>Extra Interest Cost (for taking {results.longerTenure}yr loan vs {results.shorterTenure}yr loan):</strong> {formatCurrency(results.extraInterestCost)}<br /><br />
+                            <strong>Analysis:</strong> If you choose the longer {results.longerTenure}-year loan, your EMI is lower. Can investing this monthly EMI difference(<b>{formatCurrency(results.emiDifference)}</b>) for <b>{results.shorterTenure} years</b> (the duration of the shorter loan) generate returns that offset the extra interest paid for the {results.longerTenure}-year loan?
                         </div>
 
                         <div className="cagr-analysis">
-                            {results.investmentResults.map((result, index) => (
+                            {results.investmentResults.map((result: any, index) => (
                                 <div key={index} className="cagr-scenario">
                                     <h4>CAGR: {result.cagr}% {result.cagr === parseFloat(expectedCagr) && "(Your Expectation)"}</h4>
+                                    <div className="metric">
+                                        <span className="metric-label">Payment left for next {results.longerTenure-results.shorterTenure} years (inclucing interest)</span>
+                                        <span className="metric-value">{formatCurrency(result.remainingPayment)}</span>
+                                    </div>
+                                    {result.futureValueLongTerm !== undefined && results.shorterTenure !== results.longerTenure && (
+                                      <div className="metric">
+                                          <span className="metric-label">Inv. Value after {results.longerTenure} years (Invested for first {results.shorterTenure} years, with {results.longerTenure - results.shorterTenure} years remaining for compounding)</span>
+                                          <span className="metric-value">{formatCurrency(result.futureValueLongTerm)}</span>
+                                      </div>
+                                    )}
                                     <div className="metric">
                                         <span className="metric-label">Investment Value (after {results.shorterTenure} years)</span>
                                         <span className="metric-value">{formatCurrency(result.futureValueShortTerm)}</span>
                                     </div>
-                                    {result.futureValueLongTerm !== undefined && results.shorterTenure !== results.longerTenure && (
-                                      <div className="metric">
-                                          <span className="metric-label">Difference in interest rates</span>
-                                          <span className="metric-value">{formatCurrency(results.extraInterestCost)}</span>
-                                      </div>
-                                    )}
+                                    <div className="metric">
+                                        <span className="metric-label">Difference in interest rates</span>
+                                        <span className="metric-value">{formatCurrency(results.extraInterestCost)}</span>
+                                    </div>
                                     <div className="metric">
                                         <span className="metric-label">Net Benefit (Inv. Gain after {results.shorterTenure} yrs - Extra Interest Cost of {results.longerTenure}yr loan)</span>
                                         <span className="metric-value" style={{ color: result.netBenefit > 0 ? '#28a745' : '#dc3545' }}>
@@ -266,13 +295,13 @@ const LoanTermComparisonCalculator: React.FC = () => {
                     </div>
                 </div>
             )}
-             {results && results.emiDifference < 0 && (
+            {results && results.emiDifference < 0 && (
                 <div className="results">
-                    <p className="highlight" style={{gridColumn: '1 / -1', textAlign: 'center', padding: '20px', background: '#fff3cd'}}>
+                    <p className="highlight" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '20px', background: '#fff3cd' }}>
                         The first loan tenure ({results.loan1.tenureYears} years) results in a lower or equal EMI than the second tenure ({results.loan2.tenureYears} years).
                         This typically means the first tenure is longer or equal to the second. Please ensure Loan Tenure 1 is shorter than Loan Tenure 2 for the investment analysis to be meaningful in the context of saving on EMI by choosing a longer loan.
                         If tenures are equal, there is no EMI difference to invest.
-                        <br/>Current EMI for {results.loan1.tenureYears}yr loan: {formatCurrency(results.loan1.emi)}. Current EMI for {results.loan2.tenureYears}yr loan: {formatCurrency(results.loan2.emi)}.
+                        <br />Current EMI for {results.loan1.tenureYears}yr loan: {formatCurrency(results.loan1.emi)}. Current EMI for {results.loan2.tenureYears}yr loan: {formatCurrency(results.loan2.emi)}.
                     </p>
                 </div>
             )}
