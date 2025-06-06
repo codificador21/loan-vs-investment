@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
-// Helper Functions (no changes from your provided code)
+// Helper Functions
 const calculateEMI = (principal: number, rate: number, tenureMonths: number): number => {
-    if (tenureMonths <= 0) return principal > 0 ? Infinity : 0; // Handle invalid tenure
+    if (tenureMonths <= 0) return principal > 0 ? Infinity : 0;
     const monthlyRate = rate / (12 * 100);
     if (monthlyRate === 0) {
         return principal / tenureMonths;
@@ -28,16 +28,15 @@ const calculateCompoundInterest = (
     annualRate: number,
     years: number,
     timesCompoundedPerYear: number = 1
-  ): number => {
+): number => {
     if (years <= 0 || annualRate <= 0 || principal <= 0) return principal;
-  
+    
     const ratePerPeriod = annualRate / (100 * timesCompoundedPerYear);
     const totalPeriods = years * timesCompoundedPerYear;
-  
+    
     const amount = principal * Math.pow(1 + ratePerPeriod, totalPeriods);
     return amount;
-  };
-  
+};
 
 const formatCurrency = (amount: number): string => {
     if (amount === Infinity) return "N/A (check inputs)";
@@ -46,6 +45,10 @@ const formatCurrency = (amount: number): string => {
         currency: 'INR',
         maximumFractionDigits: 0
     }).format(amount);
+};
+
+const formatPercentage = (value: number): string => {
+    return `${value.toFixed(2)}%`;
 };
 
 // Type Definitions
@@ -58,16 +61,21 @@ interface LoanDetails {
 
 interface InvestmentResult {
     cagr: number;
-    futureValueShortTerm: number; // Investment over the shorter loan tenure
-    futureValueLongTerm?: number; // Investment over the longer loan tenure (if applicable)
-    netBenefit: number; // Net benefit of choosing longer loan and investing EMI diff for shorter tenure duration
+    futureValueShortTerm: number;
+    futureValueLongTerm?: number;
+    netBenefit: number;
+    remainingPayment: number;
+    totalInvestmentAmount: number;
+    investmentGains: number;
+    effectiveInterestSaved: number;
+    roiPercentage: number;
 }
 
 interface ComparisonData {
-    loan1: LoanDetails; // Represents the shorter tenure loan
-    loan2: LoanDetails; // Represents the longer tenure loan
+    loan1: LoanDetails;
+    loan2: LoanDetails;
     emiDifference: number;
-    extraInterestCost: number; // Extra interest for loan2 vs loan1
+    extraInterestCost: number;
     investmentResults: InvestmentResult[];
     shorterTenure: number;
     longerTenure: number;
@@ -75,11 +83,11 @@ interface ComparisonData {
 }
 
 const LoanTermComparisonCalculator: React.FC = () => {
-    const [loanAmount, setLoanAmount] = useState<string>("45"); // Lakhs
-    const [interestRate, setInterestRate] = useState<string>("9"); // % per annum
-    const [tenure1, setTenure1] = useState<string>("5"); // Years for first loan option
-    const [tenure2, setTenure2] = useState<string>("10"); // Years for second loan option
-    const [expectedCagr, setExpectedCagr] = useState<string>("12"); // User's expected CAGR
+    const [loanAmount, setLoanAmount] = useState<string>("45");
+    const [interestRate, setInterestRate] = useState<string>("9");
+    const [tenure1, setTenure1] = useState<string>("5");
+    const [tenure2, setTenure2] = useState<string>("10");
+    const [expectedCagr, setExpectedCagr] = useState<string>("12");
 
     const [results, setResults] = useState<ComparisonData | null>(null);
 
@@ -99,62 +107,57 @@ const LoanTermComparisonCalculator: React.FC = () => {
             return;
         }
 
-        // Ensure tenure1 is shorter or equal to tenure2 for consistent comparison logic
         if (tenure1Years > tenure2Years) {
-            [tenure1Years, tenure2Years] = [tenure2Years, tenure1Years]; // Swap them
+            [tenure1Years, tenure2Years] = [tenure2Years, tenure1Years];
         }
 
-
-        // Loan 1 (Shorter Tenure)
         const tenure1Months = tenure1Years * 12;
         const emi1 = calculateEMI(currentLoanAmount, currentInterestRate, tenure1Months);
         const totalPayment1 = emi1 * tenure1Months;
         const totalInterest1 = totalPayment1 - currentLoanAmount;
         const loan1Details: LoanDetails = { tenureYears: tenure1Years, emi: emi1, totalPayment: totalPayment1, totalInterest: totalInterest1 };
 
-        // Loan 2 (Longer Tenure)
         const tenure2Months = tenure2Years * 12;
         const emi2 = calculateEMI(currentLoanAmount, currentInterestRate, tenure2Months);
         const totalPayment2 = emi2 * tenure2Months;
         const totalInterest2 = totalPayment2 - currentLoanAmount;
         const loan2Details: LoanDetails = { tenureYears: tenure2Years, emi: emi2, totalPayment: totalPayment2, totalInterest: totalInterest2 };
 
-        const emiDifference = emi1 - emi2; // Positive if EMI1 > EMI2 (expected if tenure1 < tenure2)
-        const extraInterestCost = totalInterest2 - totalInterest1; // Extra interest paid for longer tenure loan
-        const remainingPayment = emi2*(tenure2Months-tenure1Months);
-        console.log('aaaa',{emi2},{tenure2Months},{tenure1Months})
+        const emiDifference = emi1 - emi2;
+        const extraInterestCost = totalInterest2 - totalInterest1;
+        const remainingPayment = emi2 * (tenure2Months - tenure1Months);
 
         const cagrs = [10, 11, 12];
-        if (!cagrs.includes(userCagr)) { // Add user's CAGR if not already present, and sort
+        if (!cagrs.includes(userCagr)) {
             cagrs.push(userCagr);
             cagrs.sort((a, b) => a - b);
         }
 
-        const uniqueCagrs = Array.from(new Set(cagrs)); // Ensure unique values
-
+        const uniqueCagrs = Array.from(new Set(cagrs));
 
         const investmentResults: InvestmentResult[] = uniqueCagrs.map(cagr => {
-            // Investment happens for the duration of the shorter loan (tenure1Years)
-            // using the EMI difference obtained by opting for the longer loan.
             const futureValueShortTerm = calculateFutureValue(emiDifference, cagr, tenure1Years);
-
-            // Net benefit: Investment gain over shorter tenure vs extra interest cost of longer loan
+            const totalInvestmentAmount = emiDifference * tenure1Years * 12;
+            const investmentGains = futureValueShortTerm - totalInvestmentAmount;
+            const effectiveInterestSaved = investmentGains - extraInterestCost;
+            const roiPercentage = totalInvestmentAmount > 0 ? (investmentGains / totalInvestmentAmount) * 100 : 0;
             const netBenefit = futureValueShortTerm - extraInterestCost;
 
             let futureValueLongTerm: number | undefined = undefined;
             if (tenure1Years < tenure2Years) {
-                // Optionally, calculate FV if EMI difference was invested for the full longer tenure.
-                // This is just for informational purposes, primary comparison uses futureValueShortTerm.
-                futureValueLongTerm = calculateCompoundInterest(futureValueShortTerm, cagr, tenure2Years-tenure1Years);
+                futureValueLongTerm = calculateCompoundInterest(futureValueShortTerm, cagr, tenure2Years - tenure1Years);
             }
-
 
             return {
                 cagr,
                 futureValueShortTerm,
                 futureValueLongTerm,
                 netBenefit,
-                remainingPayment
+                remainingPayment,
+                totalInvestmentAmount,
+                investmentGains,
+                effectiveInterestSaved,
+                roiPercentage
             };
         });
 
@@ -206,7 +209,7 @@ const LoanTermComparisonCalculator: React.FC = () => {
                 </button>
             </div>
 
-            {results && results.emiDifference >= 0 && ( // Only show results if valid and EMI diff is sensible
+            {results && results.emiDifference >= 0 && (
                 <div id="results" className="results">
                     <div className="loan-option">
                         <h3>🚀 Loan Option 1 ({results.loan1.tenureYears} Years)</h3>
@@ -223,78 +226,139 @@ const LoanTermComparisonCalculator: React.FC = () => {
                     </div>
 
                     <div className="investment-analysis">
-                        <h3>📈 Investment Analysis of EMI Difference</h3>
+                        <h3>📈 Comprehensive Investment Analysis</h3>
+                        
                         <div className="highlight">
-                            <strong>EMI Difference (Opting for {results.longerTenure}yr loan over {results.shorterTenure}yr loan saves):</strong> {formatCurrency(results.emiDifference)}/month<br /> <br />
-                            <strong>Extra Interest Cost (for taking {results.longerTenure}yr loan vs {results.shorterTenure}yr loan):</strong> {formatCurrency(results.extraInterestCost)}<br /><br />
-                            <strong>Analysis:</strong> If you choose the longer {results.longerTenure}-year loan, your EMI is lower. Can investing this monthly EMI difference(<b>{formatCurrency(results.emiDifference)}</b>) for <b>{results.shorterTenure} years</b> (the duration of the shorter loan) generate returns that offset the extra interest paid for the {results.longerTenure}-year loan?
+                            <strong>📊 Key Financial Metrics:</strong><br />
+                            <strong>• Monthly EMI Savings:</strong> {formatCurrency(results.emiDifference)} (by choosing {results.longerTenure}-year loan)<br />
+                            <strong>• Total Investment Period:</strong> {results.shorterTenure} years ({results.shorterTenure * 12} months)<br />
+                            <strong>• Extra Interest Cost:</strong> {formatCurrency(results.extraInterestCost)} (for longer loan)<br />
+                            <strong>• Remaining Payments:</strong> {formatCurrency(results.remainingPayment)} (years {results.shorterTenure + 1}-{results.longerTenure})<br /><br />
+                            
+                            <strong>🎯 Investment Strategy:</strong> By choosing the {results.longerTenure}-year loan, you free up {formatCurrency(results.emiDifference)} monthly. The analysis below shows whether investing this amount for {results.shorterTenure} years can offset the additional {formatCurrency(results.extraInterestCost)} interest cost.
                         </div>
 
                         <div className="cagr-analysis">
-                            {results.investmentResults.map((result: any, index) => (
+                            {results.investmentResults.map((result: InvestmentResult, index) => (
                                 <div key={index} className="cagr-scenario">
-                                    <h4>CAGR: {result.cagr}% {result.cagr === parseFloat(expectedCagr) && "(Your Expectation)"}</h4>
+                                    <h4>📈 CAGR: {result.cagr}% {result.cagr === parseFloat(expectedCagr) && "(Your Expectation)"}</h4>
+                                    
                                     <div className="metric">
-                                        <span className="metric-label">Payment left for next {results.longerTenure-results.shorterTenure} years (inclucing interest)</span>
-                                        <span className="metric-value">{formatCurrency(result.remainingPayment)}</span>
+                                        <span className="metric-label">💰 Total Amount Invested</span>
+                                        <span className="metric-value">{formatCurrency(result.totalInvestmentAmount)}</span>
                                     </div>
-                                    {result.futureValueLongTerm !== undefined && results.shorterTenure !== results.longerTenure && (
-                                      <div className="metric">
-                                          <span className="metric-label">Inv. Value after {results.longerTenure} years (Invested for first {results.shorterTenure} years, with {results.longerTenure - results.shorterTenure} years remaining for compounding)</span>
-                                          <span className="metric-value">{formatCurrency(result.futureValueLongTerm)}</span>
-                                      </div>
-                                    )}
+                                    
                                     <div className="metric">
-                                        <span className="metric-label">Investment Value (after {results.shorterTenure} years)</span>
+                                        <span className="metric-label">📊 Investment Value (after {results.shorterTenure} years)</span>
                                         <span className="metric-value">{formatCurrency(result.futureValueShortTerm)}</span>
                                     </div>
+                                    
                                     <div className="metric">
-                                        <span className="metric-label">Difference in interest rates</span>
-                                        <span className="metric-value">{formatCurrency(results.extraInterestCost)}</span>
+                                        <span className="metric-label">📈 Investment Gains</span>
+                                        <span className="metric-value" style={{ color: result.investmentGains > 0 ? '#28a745' : '#dc3545' }}>
+                                            {formatCurrency(result.investmentGains)} ({formatPercentage(result.roiPercentage)})
+                                        </span>
                                     </div>
+                                    
                                     <div className="metric">
-                                        <span className="metric-label">Net Benefit (Inv. Gain after {results.shorterTenure} yrs - Extra Interest Cost of {results.longerTenure}yr loan)</span>
+                                        <span className="metric-label">🏦 Extra Interest Cost (Longer Loan)</span>
+                                        <span className="metric-value" style={{ color: '#dc3545' }}>
+                                            {formatCurrency(results.extraInterestCost)}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="metric">
+                                        <span className="metric-label">⚖️ Net Financial Position</span>
                                         <span className="metric-value" style={{ color: result.netBenefit > 0 ? '#28a745' : '#dc3545' }}>
                                             {formatCurrency(result.netBenefit)}
                                         </span>
                                     </div>
+                                    
                                     <div className="metric">
-                                        <span className="metric-label">Break-even ({results.shorterTenure}yr Investment vs Extra Interest)</span>
+                                        <span className="metric-label">✅ Break-even Analysis</span>
                                         <span className="metric-value" style={{ color: result.futureValueShortTerm > results.extraInterestCost ? '#28a745' : '#dc3545' }}>
-                                            {result.futureValueShortTerm > results.extraInterestCost ? 'Investment Wins ✅' : 'Extra Interest Costs More ❌'}
+                                            {result.futureValueShortTerm > results.extraInterestCost ? 'Investment Strategy Wins ✅' : 'Shorter Loan Better ❌'}
                                         </span>
                                     </div>
+                                    
+                                    {result.futureValueLongTerm !== undefined && results.shorterTenure !== results.longerTenure && (
+                                        <>
+                                            <div className="metric">
+                                                <span className="metric-label">🚀 Future Value (after {results.longerTenure} years)</span>
+                                                <span className="metric-value">{formatCurrency(result.futureValueLongTerm)}</span>
+                                            </div>
+                                            
+                                            <div className="metric">
+                                                <span className="metric-label">💳 Remaining Loan Payments</span>
+                                                <span className="metric-value">{formatCurrency(result.remainingPayment)}</span>
+                                            </div>
+                                            
+                                            <div className="metric">
+                                                <span className="metric-label">🎯 Net Worth Impact (after {results.longerTenure} years)</span>
+                                                <span className="metric-value" style={{ color: (result.futureValueLongTerm - result.remainingPayment) > 0 ? '#28a745' : '#dc3545' }}>
+                                                    {formatCurrency(result.futureValueLongTerm - result.remainingPayment)}
+                                                </span>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             ))}
                         </div>
                     </div>
 
                     <div className="recommendation">
-                        <h3>💡 Recommendation Analysis</h3>
-                        <p>
-                            <strong>The Question:</strong> You pay an extra {formatCurrency(results.extraInterestCost)} in interest if you opt for the {results.longerTenure}-year loan instead of the {results.shorterTenure}-year loan.
-                            However, the {results.longerTenure}-year loan has a lower EMI, giving you an EMI difference of {formatCurrency(results.emiDifference)} per month.
-                            Is it better to take the {results.longerTenure}-year loan and invest this EMI difference for the first {results.shorterTenure} years?
-                        </p>
-                        <p>
-                            <strong>Answer based on investing the EMI difference for {results.shorterTenure} years:</strong>{' '}
-                            {results.investmentResults.some(r => r.netBenefit > 0)
-                                ? (results.investmentResults.every(r => r.netBenefit > 0)
-                                    ? 'Investing the EMI difference appears consistently beneficial across tested CAGRs!'
-                                    : 'Investing the EMI difference can be beneficial, especially at higher CAGRs. Consider your expected investment return and risk tolerance.')
-                                : 'Across the tested CAGRs, the gains from investing the EMI difference for {results.shorterTenure} years do not typically offset the extra interest paid for the {results.longerTenure}-year loan. The shorter loan might be more cost-effective.'
-                            }
-                        </p>
-                        <div style={{ marginTop: '15px', padding: '15px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px' }}>
-                            {results.investmentResults.map(res => (
-                                <p key={res.cagr}>
-                                    <strong>At {res.cagr}% CAGR{res.cagr === parseFloat(expectedCagr) && " (Your Exp.)"}:</strong> Net financial position after {results.shorterTenure} years is {formatCurrency(res.netBenefit)}
-                                </p>
-                            ))}
+                        <h3>💡 Strategic Financial Recommendation</h3>
+                        
+                        <div style={{ textAlign: 'left', marginBottom: '20px' }}>
+                            <p><strong>🎯 The Core Question:</strong></p>
+                            <p>Should you pay an extra {formatCurrency(results.extraInterestCost)} in interest (by choosing the {results.longerTenure}-year loan) to free up {formatCurrency(results.emiDifference)} monthly for investment over {results.shorterTenure} years?</p>
+                        </div>
+
+                        <div style={{ textAlign: 'left', marginBottom: '20px' }}>
+                            <p><strong>📊 Analysis Summary:</strong></p>
+                            {results.investmentResults.map(res => {
+                                const isPositive = res.netBenefit > 0;
+                                const breakEvenCAGR = results.extraInterestCost > 0 ? 
+                                    (Math.pow(results.extraInterestCost / (results.emiDifference * results.shorterTenure * 12) + 1, 1/results.shorterTenure) - 1) * 100 : 0;
+                                
+                                return (
+                                    <p key={res.cagr} style={{ 
+                                        padding: '8px 12px', 
+                                        margin: '5px 0', 
+                                        backgroundColor: isPositive ? 'rgba(40, 167, 69, 0.1)' : 'rgba(220, 53, 69, 0.1)',
+                                        borderRadius: '8px',
+                                        borderLeft: `4px solid ${isPositive ? '#28a745' : '#dc3545'}`
+                                    }}>
+                                        <strong>At {res.cagr}% CAGR{res.cagr === parseFloat(expectedCagr) && " (Your Expectation)"}:</strong> 
+                                        {isPositive ? 
+                                            ` You save ${formatCurrency(res.netBenefit)} by choosing the longer loan and investing the EMI difference.` :
+                                            ` You lose ${formatCurrency(Math.abs(res.netBenefit))} compared to taking the shorter loan.`
+                                        }
+                                    </p>
+                                );
+                            })}
+                        </div>
+
+                        <div style={{ textAlign: 'left', padding: '15px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px' }}>
+                            <p><strong>🎯 Final Recommendation:</strong></p>
+                            {results.investmentResults.some(r => r.netBenefit > 0) ? (
+                                results.investmentResults.every(r => r.netBenefit > 0) ? (
+                                    <p>✅ <strong>Choose the {results.longerTenure}-year loan and invest the EMI difference.</strong> This strategy shows consistent positive returns across all tested CAGR scenarios. The investment approach appears to be the optimal financial strategy.</p>
+                                ) : (
+                                    <p>⚖️ <strong>The decision depends on your expected investment returns.</strong> If you're confident in achieving higher CAGRs ({results.investmentResults.filter(r => r.netBenefit > 0).map(r => r.cagr + '%').join(', ')}), choose the longer loan. Otherwise, the shorter loan provides more certainty.</p>
+                                )
+                            ) : (
+                                <p>❌ <strong>Choose the {results.shorterTenure}-year loan.</strong> Based on the tested scenarios, the shorter loan term appears more cost-effective. The investment gains don't sufficiently offset the extra interest costs.</p>
+                            )}
+                            
+                            <p style={{ marginTop: '10px', fontSize: '0.9em', opacity: '0.9' }}>
+                                <strong>⚠️ Important:</strong> This analysis assumes consistent monthly investments and doesn't account for market volatility, investment fees, or tax implications. Consider your risk tolerance and consult a financial advisor for personalized advice.
+                            </p>
                         </div>
                     </div>
                 </div>
             )}
+            
             {results && results.emiDifference < 0 && (
                 <div className="results">
                     <p className="highlight" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '20px', background: '#fff3cd' }}>
