@@ -200,7 +200,7 @@ const LoanTermComparisonCalculator: React.FC = () => {
                         <input type="number" id="tenure2" value={tenure2} onChange={(e) => setTenure2(e.target.value)} step="1" />
                     </div>
                     <div className="form-group">
-                        <label htmlFor="expectedCagr">Expected Investment CAGR (%)</label>
+                        <label htmlFor="expectedCagr">Expected Annualized Investment Return (for monthly investments) (%)</label>
                         <input type="number" id="expectedCagr" value={expectedCagr} onChange={(e) => setExpectedCagr(e.target.value)} step="0.1" />
                     </div>
                 </div>
@@ -241,7 +241,7 @@ const LoanTermComparisonCalculator: React.FC = () => {
                         <div className="cagr-analysis">
                             {results.investmentResults.map((result: InvestmentResult, index) => (
                                 <div key={index} className="cagr-scenario">
-                                    <h4>📈 CAGR: {result.cagr}% {result.cagr === parseFloat(expectedCagr) && "(Your Expectation)"}</h4>
+                                    <h4>📈 Expected Return: {result.cagr}% {result.cagr === parseFloat(expectedCagr) && "(Your Expectation)"}</h4>
                                     
                                     <div className="metric">
                                         <span className="metric-label">💰 Total Amount Invested</span>
@@ -318,8 +318,8 @@ const LoanTermComparisonCalculator: React.FC = () => {
                             <p><strong>📊 Analysis Summary:</strong></p>
                             {results.investmentResults.map(res => {
                                 const isPositive = res.netBenefit > 0;
-                                const breakEvenCAGR = results.extraInterestCost > 0 ? 
-                                    (Math.pow(results.extraInterestCost / (results.emiDifference * results.shorterTenure * 12) + 1, 1/results.shorterTenure) - 1) * 100 : 0;
+                                // Recalculate breakEvenCAGR here if needed for display, otherwise rely on the one from previous logic.
+                                // For simplicity and consistency with the helper function, we'll just display the result.
                                 
                                 return (
                                     <p key={res.cagr} style={{ 
@@ -329,10 +329,10 @@ const LoanTermComparisonCalculator: React.FC = () => {
                                         borderRadius: '8px',
                                         borderLeft: `4px solid ${isPositive ? '#28a745' : '#dc3545'}`
                                     }}>
-                                        <strong>At {res.cagr}% CAGR{res.cagr === parseFloat(expectedCagr) && " (Your Expectation)"}:</strong> 
+                                        <strong>At {res.cagr}% Expected Annualized Return{res.cagr === parseFloat(expectedCagr) && " (Your Expectation)"}:</strong> 
                                         {isPositive ? 
-                                            ` You save ${formatCurrency(res.netBenefit)} by choosing the longer loan and investing the EMI difference.` :
-                                            ` You lose ${formatCurrency(Math.abs(res.netBenefit))} compared to taking the shorter loan.`
+                                            ` You could benefit by ${formatCurrency(res.netBenefit)} by choosing the longer loan and investing the EMI difference.` :
+                                            ` You could incur an additional cost of ${formatCurrency(Math.abs(res.netBenefit))} compared to taking the shorter loan.`
                                         }
                                     </p>
                                 );
@@ -343,16 +343,16 @@ const LoanTermComparisonCalculator: React.FC = () => {
                             <p><strong>🎯 Final Recommendation:</strong></p>
                             {results.investmentResults.some(r => r.netBenefit > 0) ? (
                                 results.investmentResults.every(r => r.netBenefit > 0) ? (
-                                    <p>✅ <strong>Choose the {results.longerTenure}-year loan and invest the EMI difference.</strong> This strategy shows consistent positive returns across all tested CAGR scenarios. The investment approach appears to be the optimal financial strategy.</p>
+                                    <p>✅ <strong>Choose the {results.longerTenure}-year loan and invest the EMI difference.</strong> This strategy shows consistent positive returns across all tested scenarios. The investment approach appears to be the optimal financial strategy given your expected returns.</p>
                                 ) : (
-                                    <p>⚖️ <strong>The decision depends on your expected investment returns.</strong> If you're confident in achieving higher CAGRs ({results.investmentResults.filter(r => r.netBenefit > 0).map(r => r.cagr + '%').join(', ')}), choose the longer loan. Otherwise, the shorter loan provides more certainty.</p>
+                                    <p>⚖️ <strong>The decision depends on your expected investment returns.</strong> If you're confident in consistently achieving higher annualized returns ({results.investmentResults.filter(r => r.netBenefit > 0).map(r => r.cagr + '%').join(', ')}), choose the longer loan. Otherwise, the shorter loan provides more financial certainty by minimizing total interest paid.</p>
                                 )
                             ) : (
-                                <p>❌ <strong>Choose the {results.shorterTenure}-year loan.</strong> Based on the tested scenarios, the shorter loan term appears more cost-effective. The investment gains don't sufficiently offset the extra interest costs.</p>
+                                <p>❌ <strong>Choose the {results.shorterTenure}-year loan.</strong> Based on the tested scenarios, the shorter loan term appears more cost-effective. The potential investment gains are not sufficient to offset the extra interest costs incurred with the longer loan.</p>
                             )}
                             
                             <p style={{ marginTop: '10px', fontSize: '0.9em', opacity: '0.9' }}>
-                                <strong>⚠️ Important:</strong> This analysis assumes consistent monthly investments and doesn't account for market volatility, investment fees, or tax implications. Consider your risk tolerance and consult a financial advisor for personalized advice.
+                                <strong>⚠️ Important:</strong> This analysis assumes consistent monthly investments and does not account for market volatility, investment fees, or tax implications. It's a projection based on your input. Consider your risk tolerance and consult a financial advisor for personalized advice.
                             </p>
                         </div>
                     </div>
