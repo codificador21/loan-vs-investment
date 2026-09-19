@@ -31,6 +31,8 @@ export interface LineSeries {
     name: string;
     color: string;
     values: number[];
+    /** Draw a soft wash under the line. */
+    area?: boolean;
 }
 
 interface LineChartProps {
@@ -58,6 +60,9 @@ export const LineChart: React.FC<LineChartProps> = ({ series, xLabel, xTicks, fo
 
     const path = (values: number[]) =>
         values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+
+    const areaPath = (values: number[]) =>
+        `${path(values)}L${x(n - 1).toFixed(1)},${h}L${x(0).toFixed(1)},${h}Z`;
 
     const indexAt = (clientX: number, rect: DOMRect) => {
         const px = clientX - rect.left - m.left;
@@ -100,6 +105,9 @@ export const LineChart: React.FC<LineChartProps> = ({ series, xLabel, xTicks, fo
                         <text key={i} className="axis" x={x(i)} y={h + 22} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}>
                             {xLabel(i)}
                         </text>
+                    ))}
+                    {series.filter(s => s.area).map(s => (
+                        <path key={`${s.name}-area`} d={areaPath(s.values)} fill={s.color} opacity={0.1} />
                     ))}
                     {series.map(s => (
                         <path key={s.name} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />

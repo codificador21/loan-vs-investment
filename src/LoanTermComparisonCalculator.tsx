@@ -225,6 +225,20 @@ const Field: React.FC<FieldProps> = ({ id, label, hint, value, onChange, unit, s
     );
 };
 
+const VerdictIcon: React.FC<{ status: string }> = ({ status }) => (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {status === "win" && <path d="M3 8.5l3.2 3.2L13 5" />}
+        {status === "lose" && <><path d="M8 3.5v5.2" /><path d="M8 12h.01" /></>}
+        {status === "tie" && <><path d="M3 6.5h10" /><path d="M3 10.5h10" /></>}
+    </svg>
+);
+
+const DeltaIcon: React.FC<{ up: boolean }> = ({ up }) => (
+    <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" className="delta-icon">
+        <path d={up ? "M6 2l4.5 7.2h-9z" : "M6 10L1.5 2.8h9z"} fill="currentColor" />
+    </svg>
+);
+
 const COLORS = {
     invest: '#2a78d6',
     owed: '#eb6834',
@@ -411,7 +425,7 @@ const Results: React.FC<{ results: ComparisonData }> = ({ results }) => {
 
             <section className={`card verdict ${status}`} aria-labelledby="verdict-title" aria-live="polite">
                 <div className="verdict-badge">
-                    <span className="verdict-icon" aria-hidden="true">{isTie ? "=" : planBWins ? "✓" : "!"}</span>
+                    <span className="verdict-icon" aria-hidden="true"><VerdictIcon status={status} /></span>
                     {isTie ? "Roughly equal" : planBWins ? "Plan B is better" : "Plan A is better"}
                 </div>
                 <h2 id="verdict-title">
@@ -437,17 +451,17 @@ const Results: React.FC<{ results: ComparisonData }> = ({ results }) => {
             </section>
 
             <section className="stats" aria-label="Key numbers">
-                <div className="stat">
+                <div className="stat accent-blue">
                     <span className="stat-label">EMI saved with Plan B</span>
                     <span className="stat-value">{formatCurrency(emiDifference)}<small>/mo</small></span>
                     <span className="stat-note">to invest for {years(shortY)}</span>
                 </div>
-                <div className="stat">
+                <div className="stat accent-orange">
                     <span className="stat-label">Extra interest in Plan B</span>
                     <span className="stat-value">{formatShort(extraInterestCost)}</span>
                     <span className="stat-note">over the full {years(longY)}</span>
                 </div>
-                <div className="stat">
+                <div className="stat accent-teal">
                     <span className="stat-label">Plan B's investments</span>
                     <span className="stat-value">{formatShort(userScenario.investmentValue)}</span>
                     <span className="stat-note">after {years(shortY)} at {userScenario.annualReturn}%</span>
@@ -461,11 +475,11 @@ const Results: React.FC<{ results: ComparisonData }> = ({ results }) => {
                         <thead>
                             <tr>
                                 <th scope="col"><span className="sr-only">Measure</span></th>
-                                <th scope="col">
+                                <th scope="col" className="col-a">
                                     <span className="plan-tag a">Plan A</span>
                                     <span className="plan-name">Repay in {years(shortY)}</span>
                                 </th>
-                                <th scope="col">
+                                <th scope="col" className="col-b">
                                     <span className="plan-tag b">Plan B</span>
                                     <span className="plan-name">Repay in {years(longY)} + invest</span>
                                 </th>
@@ -518,7 +532,7 @@ const Results: React.FC<{ results: ComparisonData }> = ({ results }) => {
                 ]} />
                 <LineChart
                     series={[
-                        { name: "Investments", color: COLORS.invest, values: timeline.invested },
+                        { name: "Investments", color: COLORS.invest, values: timeline.invested, area: true },
                         { name: "Loan still owed", color: COLORS.owed, values: timeline.owed },
                     ]}
                     xTicks={xTicks}
@@ -583,9 +597,9 @@ const Results: React.FC<{ results: ComparisonData }> = ({ results }) => {
                                             {tie ? (
                                                 <span className="delta neutral">About equal</span>
                                             ) : s.netBenefit > 0 ? (
-                                                <span className="delta up">▲ {formatShort(s.netBenefit)} better</span>
+                                                <span className="delta up"><DeltaIcon up /> {formatShort(s.netBenefit)} better</span>
                                             ) : (
-                                                <span className="delta down">▼ {formatShort(-s.netBenefit)} worse</span>
+                                                <span className="delta down"><DeltaIcon up={false} /> {formatShort(-s.netBenefit)} worse</span>
                                             )}
                                         </td>
                                     </tr>
