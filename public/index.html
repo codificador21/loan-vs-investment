@@ -1,43 +1,101 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-IN">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <title>Loan vs Investment Calculator – Shorter Loan or Invest the EMI Difference?</title>
     <meta
       name="description"
-      content="Should you take a shorter loan, or a longer one and invest the EMI difference? Compare both in plain numbers."
+      content="Free calculator: compare repaying a loan faster with taking a longer loan and investing the EMI difference in a SIP. See which option leaves you with more money, with charts and break-even return."
     />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+    <link rel="canonical" href="https://loan-vs-investment.vercel.app/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="theme-color" content="#1d4ed8" />
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>Loan vs Investment Calculator</title>
+    <link rel="icon" href="%PUBLIC_URL%/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" sizes="48x48" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- Open Graph / social sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Loan vs Investment Calculator" />
+    <meta property="og:url" content="https://loan-vs-investment.vercel.app/" />
+    <meta property="og:title" content="Loan vs Investment Calculator" />
+    <meta property="og:description" content="Shorter loan, or longer loan and invest the EMI difference? Compare both options and see which leaves you with more money." />
+    <meta property="og:image" content="https://loan-vs-investment.vercel.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_IN" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Loan vs Investment Calculator" />
+    <meta name="twitter:description" content="Shorter loan, or longer loan and invest the EMI difference? Compare both options and see which leaves you with more money." />
+    <meta name="twitter:image" content="https://loan-vs-investment.vercel.app/og-image.png" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebApplication",
+            "name": "Loan vs Investment Calculator",
+            "url": "https://loan-vs-investment.vercel.app/",
+            "description": "Compare repaying a loan faster with taking a longer loan and investing the EMI difference.",
+            "applicationCategory": "FinanceApplication",
+            "operatingSystem": "Any",
+            "inLanguage": "en-IN",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" }
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Is it better to take a shorter loan or a longer loan and invest the difference?",
+                "acceptedAnswer": { "@type": "Answer", "text": "It depends on one number: whether your investments earn more than your loan's interest rate, after tax and fees. If they do, the longer loan plus investing usually leaves you with more money. If they don't, the shorter loan wins, and it's also the lower-risk choice." }
+              },
+              {
+                "@type": "Question",
+                "name": "How does this calculator compare the two options?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Both options cost you the same amount every month until the shorter loan ends: in Plan B, whatever you save on EMI goes into investments. When the shorter loan ends, Plan A is debt-free. Plan B has an investment pot but still owes part of its loan. The calculator compares that pot with the loan still owed. If the pot is bigger, Plan B wins by the difference." }
+              },
+              {
+                "@type": "Question",
+                "name": "What investment return should I assume?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Use a realistic, cautious number, and remember to subtract tax and fund fees. Fixed deposits and debt funds typically earn less than most loan rates. Equity mutual funds have historically earned more over long periods, but with large ups and downs and no guarantee." }
+              },
+              {
+                "@type": "Question",
+                "name": "Should I prepay my home loan or invest in a SIP?",
+                "acceptedAnswer": { "@type": "Answer", "text": "The same logic applies. Prepaying earns you a guaranteed 'return' equal to your loan rate. Investing can earn more, but it's uncertain. Home loans also carry tax benefits on interest in many cases, which lowers the effective loan rate and tilts the decision toward investing." }
+              },
+              {
+                "@type": "Question",
+                "name": "What is an EMI?",
+                "acceptedAnswer": { "@type": "Answer", "text": "EMI (Equated Monthly Instalment) is the fixed amount you pay your lender every month. Each EMI covers part of the interest and part of the loan amount. A longer loan spreads the loan over more EMIs, so each one is smaller, but you pay interest for longer." }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
+    <noscript>You need to enable JavaScript to use this calculator.</noscript>
+    <div id="root">
+      <!-- Shown until the app loads, and readable by search engines. React replaces it. -->
+      <main style="max-width:760px;margin:0 auto;padding:40px 20px;font-family:system-ui,sans-serif;color:#0f1b2d">
+        <h1>Loan vs Investment Calculator</h1>
+        <p>
+          Should you repay your loan quickly, or take a longer loan with a lower EMI and invest the difference?
+          This free calculator compares both options side by side: monthly EMI, total interest, how much your
+          investments could grow, and the break-even return you need for investing to pay off.
+        </p>
+      </main>
+    </div>
   </body>
 </html>

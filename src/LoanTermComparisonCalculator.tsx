@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { LineChart, StackedBars, Legend } from './charts';
 
 // Helper Functions
 const calculateEMI = (principal: number, rate: number, tenureMonths: number): number => {
@@ -51,7 +52,23 @@ const formatShort = (amount: number): string => {
     return formatCurrency(amount);
 };
 
+// Compact axis label: ₹25L, ₹1.2Cr.
+const formatAxis = (amount: number): string => {
+    if (amount === 0) return "₹0";
+    if (amount >= 1e7) return `₹${parseFloat((amount / 1e7).toFixed(2))}Cr`;
+    if (amount >= 1e5) return `₹${parseFloat((amount / 1e5).toFixed(1))}L`;
+    return `₹${Math.round(amount / 1000)}K`;
+};
+
 const years = (n: number) => `${n} ${n === 1 ? "year" : "years"}`;
+
+const monthLabel = (i: number) => {
+    const y = Math.floor(i / 12);
+    const mo = i % 12;
+    if (i === 0) return "Today";
+    if (mo === 0) return `Year ${y}`;
+    return y === 0 ? `Month ${mo}` : `Year ${y}, month ${mo}`;
+};
 
 // Type Definitions
 interface LoanDetails {
@@ -70,6 +87,8 @@ interface Scenario {
 }
 
 interface ComparisonData {
+    principal: number;
+    rate: number;
     shortLoan: LoanDetails;
     longLoan: LoanDetails;
     emiDifference: number;
@@ -77,6 +96,7 @@ interface ComparisonData {
     loanBalanceAtShortEnd: number;
     scenarios: Scenario[];
     userScenario: Scenario;
+    timeline: { invested: number[]; owed: number[] };
     swapped: boolean;
 }
 
@@ -101,8 +121,8 @@ const compare = (
 
     if (isNaN(principal) || principal <= 0 ||
         isNaN(rate) || rate < 0 ||
-        isNaN(shortYears) || shortYears <= 0 ||
-        isNaN(longYears) || longYears <= 0 ||
+        isNaN(shortYears) || shortYears <= 0 || shortYears > 50 ||
+        isNaN(longYears) || longYears <= 0 || longYears > 50 ||
         isNaN(userReturn) || userReturn < 0) {
         return null;
     }
@@ -134,7 +154,16 @@ const compare = (
 
     const returns = Array.from(new Set([6, 8, 10, 12, 14, userReturn])).sort((a, b) => a - b);
 
+    const invested: number[] = [];
+    const owed: number[] = [];
+    for (let i = 0; i <= months; i++) {
+        invested.push(calculateFutureValue(emiDifference, userReturn, i));
+        owed.push(calculateOutstandingBalance(principal, rate, longLoan.emi, i));
+    }
+
     return {
+        principal,
+        rate,
         shortLoan,
         longLoan,
         emiDifference,
@@ -142,6 +171,7 @@ const compare = (
         loanBalanceAtShortEnd,
         scenarios: returns.map(scenarioFor),
         userScenario: scenarioFor(userReturn),
+        timeline: { invested, owed },
         swapped
     };
 };
@@ -153,29 +183,76 @@ interface FieldProps {
     value: string;
     onChange: (v: string) => void;
     unit: string;
-    step: string;
-    min?: string;
+    step: number;
+    min: number;
+    max: number;
 }
 
-const Field: React.FC<FieldProps> = ({ id, label, hint, value, onChange, unit, step, min = "0" }) => (
-    <div className="field">
-        <label htmlFor={id}>{label}</label>
-        <div className="input-wrap">
+const Field: React.FC<FieldProps> = ({ id, label, hint, value, onChange, unit, step, min, max }) => {
+    const num = parseFloat(value);
+    const pct = isNaN(num) ? 0 : Math.min(100, Math.max(0, ((num - min) / (max - min)) * 100));
+    return (
+        <div className="field">
+            <div className="field-top">
+                <label htmlFor={id}>{label}</label>
+                <div className="input-wrap">
+                    <input
+                        type="number"
+                        inputMode="decimal"
+                        id={id}
+                        value={value}
+                        min={min}
+                        step={step}
+                        onChange={(e) => onChange(e.target.value)}
+                        aria-describedby={`${id}-hint`}
+                    />
+                    <span className="unit">{unit}</span>
+                </div>
+            </div>
             <input
-                type="number"
-                inputMode="decimal"
-                id={id}
-                value={value}
+                type="range"
+                className="slider"
                 min={min}
+                max={max}
                 step={step}
+                value={isNaN(num) ? min : Math.min(Math.max(num, min), max)}
                 onChange={(e) => onChange(e.target.value)}
-                aria-describedby={`${id}-hint`}
+                aria-label={label}
+                style={{ '--pct': `${pct}%` } as React.CSSProperties}
             />
-            <span className="unit">{unit}</span>
+            <p className="hint" id={`${id}-hint`}>{hint}</p>
         </div>
-        <p className="hint" id={`${id}-hint`}>{hint}</p>
-    </div>
-);
+    );
+};
+
+const COLORS = {
+    invest: '#2a78d6',
+    owed: '#eb6834',
+    principal: '#c6ccd6',
+};
+
+const faqs: { q: string; a: string }[] = [
+    {
+        q: "Is it better to take a shorter loan or a longer loan and invest the difference?",
+        a: "It depends on one number: whether your investments earn more than your loan's interest rate, after tax and fees. If they do, the longer loan plus investing usually leaves you with more money. If they don't, the shorter loan wins, and it's also the lower-risk choice."
+    },
+    {
+        q: "How does this calculator compare the two options?",
+        a: "Both options cost you the same amount every month until the shorter loan ends: in Plan B, whatever you save on EMI goes into investments. When the shorter loan ends, Plan A is debt-free. Plan B has an investment pot but still owes part of its loan. The calculator compares that pot with the loan still owed. If the pot is bigger, Plan B wins by the difference."
+    },
+    {
+        q: "What investment return should I assume?",
+        a: "Use a realistic, cautious number, and remember to subtract tax and fund fees. Fixed deposits and debt funds typically earn less than most loan rates. Equity mutual funds have historically earned more over long periods, but with large ups and downs and no guarantee."
+    },
+    {
+        q: "Should I prepay my home loan or invest in a SIP?",
+        a: "The same logic applies. Prepaying earns you a guaranteed 'return' equal to your loan rate. Investing can earn more, but it's uncertain. Home loans also carry tax benefits on interest in many cases, which lowers the effective loan rate and tilts the decision toward investing."
+    },
+    {
+        q: "What is an EMI?",
+        a: "EMI (Equated Monthly Instalment) is the fixed amount you pay your lender every month. Each EMI covers part of the interest and part of the loan amount. A longer loan spreads the loan over more EMIs, so each one is smaller, but you pay interest for longer."
+    }
+];
 
 const LoanTermComparisonCalculator: React.FC = () => {
     const [loanAmount, setLoanAmount] = useState<string>("45");
@@ -190,208 +267,303 @@ const LoanTermComparisonCalculator: React.FC = () => {
     );
 
     const principal = parseFloat(loanAmount) * 100000;
-    const rate = parseFloat(interestRate);
 
     return (
-        <div className="page">
-            <header className="hero">
-                <p className="eyebrow">Loan vs. Investment Calculator</p>
-                <h1>Should you repay your loan fast, or stretch it out and invest the rest?</h1>
-                <p className="lede">
-                    A longer loan means a smaller EMI, but more interest. If you invest the money
-                    you save every month, could that investment grow enough to make up for it?
-                    Enter your numbers below to find out.
-                </p>
+        <>
+            <header className="topbar">
+                <div className="topbar-inner">
+                    <a className="brand" href="/">
+                        <img src="/favicon.svg" alt="" width={28} height={28} />
+                        <span>Loan vs Investment</span>
+                    </a>
+                    <a className="topbar-link" href="#faq">How it works</a>
+                </div>
             </header>
 
-            <section className="card inputs" aria-labelledby="inputs-title">
-                <div className="card-head">
-                    <h2 id="inputs-title">Your loan details</h2>
-                    <span className="live-note">Results update as you type</span>
-                </div>
-                <div className="fields">
-                    <Field
-                        id="loanAmount"
-                        label="How much are you borrowing?"
-                        unit="lakh ₹"
-                        step="0.5"
-                        value={loanAmount}
-                        onChange={setLoanAmount}
-                        hint={principal > 0 ? `That's ${formatCurrency(principal)}` : "1 lakh = ₹1,00,000"}
-                    />
-                    <Field
-                        id="interestRate"
-                        label="Loan interest rate"
-                        unit="% a year"
-                        step="0.1"
-                        value={interestRate}
-                        onChange={setInterestRate}
-                        hint="The yearly rate your bank charges"
-                    />
-                    <Field
-                        id="tenure1"
-                        label="Shorter loan period"
-                        unit="years"
-                        step="1"
-                        min="1"
-                        value={tenure1}
-                        onChange={setTenure1}
-                        hint="Higher EMI, paid off sooner"
-                    />
-                    <Field
-                        id="tenure2"
-                        label="Longer loan period"
-                        unit="years"
-                        step="1"
-                        min="1"
-                        value={tenure2}
-                        onChange={setTenure2}
-                        hint="Lower EMI, more interest overall"
-                    />
-                    <Field
-                        id="expectedReturn"
-                        label="Return you expect from investing"
-                        unit="% a year"
-                        step="0.5"
-                        value={expectedReturn}
-                        onChange={setExpectedReturn}
-                        hint="E.g. from a mutual fund SIP. Returns aren't guaranteed, so a cautious guess is safer."
-                    />
-                </div>
-            </section>
+            <main className="page">
+                <section className="hero">
+                    <h1>Loan vs Investment Calculator</h1>
+                    <p className="lede">
+                        Should you repay your loan quickly, or take a longer loan with a lower EMI and invest the difference?
+                        Enter your numbers to see which option leaves you with more money.
+                    </p>
+                </section>
 
-            {results === null && (
-                <div className="notice" role="status">
-                    Please fill in every field with a number above zero to see the comparison.
-                </div>
-            )}
+                <div className="layout">
+                    <aside className="card inputs" aria-labelledby="inputs-title">
+                        <h2 id="inputs-title">Your details</h2>
+                        <Field
+                            id="loanAmount"
+                            label="Loan amount"
+                            unit="lakh"
+                            step={1}
+                            min={1}
+                            max={200}
+                            value={loanAmount}
+                            onChange={setLoanAmount}
+                            hint={principal > 0 ? `${formatCurrency(principal)}` : "1 lakh = ₹1,00,000"}
+                        />
+                        <Field
+                            id="interestRate"
+                            label="Interest rate"
+                            unit="% p.a."
+                            step={0.1}
+                            min={1}
+                            max={20}
+                            value={interestRate}
+                            onChange={setInterestRate}
+                            hint="Yearly rate charged by your lender"
+                        />
+                        <Field
+                            id="tenure1"
+                            label="Shorter loan period"
+                            unit="years"
+                            step={1}
+                            min={1}
+                            max={30}
+                            value={tenure1}
+                            onChange={setTenure1}
+                            hint="Plan A: higher EMI, paid off sooner"
+                        />
+                        <Field
+                            id="tenure2"
+                            label="Longer loan period"
+                            unit="years"
+                            step={1}
+                            min={1}
+                            max={30}
+                            value={tenure2}
+                            onChange={setTenure2}
+                            hint="Plan B: lower EMI, more interest overall"
+                        />
+                        <Field
+                            id="expectedReturn"
+                            label="Expected investment return"
+                            unit="% p.a."
+                            step={0.5}
+                            min={0}
+                            max={20}
+                            value={expectedReturn}
+                            onChange={setExpectedReturn}
+                            hint="After tax and fees. Returns are not guaranteed."
+                        />
+                    </aside>
 
-            {results === "same-tenure" && (
-                <div className="notice" role="status">
-                    Both loan periods are the same, so there's nothing to compare. Make one of them longer.
+                    <div className="results">
+                        {results === null && (
+                            <div className="notice" role="status">
+                                Enter a positive number in every field to see the comparison.
+                            </div>
+                        )}
+                        {results === "same-tenure" && (
+                            <div className="notice" role="status">
+                                Both loan periods are the same, so there's nothing to compare. Make one of them longer.
+                            </div>
+                        )}
+                        {results && typeof results === "object" && <Results results={results} />}
+                    </div>
                 </div>
-            )}
 
-            {results && typeof results === "object" && (
-                <Results results={results} rate={rate} />
-            )}
-        </div>
+                <section className="card faq" id="faq" aria-labelledby="faq-title">
+                    <h2 id="faq-title">Frequently asked questions</h2>
+                    {faqs.map(f => (
+                        <details key={f.q}>
+                            <summary>{f.q}</summary>
+                            <p>{f.a}</p>
+                        </details>
+                    ))}
+                </section>
+            </main>
+
+            <footer className="footer">
+                <p>
+                    This calculator gives estimates based on the numbers you enter. It is not financial advice.
+                    For a major decision, consult a qualified financial advisor.
+                </p>
+                <p>
+                    <a href="https://github.com/codificador21/loan-vs-investment" rel="noopener">Source on GitHub</a>
+                </p>
+            </footer>
+        </>
     );
 };
 
-const Results: React.FC<{ results: ComparisonData; rate: number }> = ({ results, rate }) => {
-    const { shortLoan, longLoan, emiDifference, extraInterestCost, loanBalanceAtShortEnd, userScenario, scenarios, swapped } = results;
+const Results: React.FC<{ results: ComparisonData }> = ({ results }) => {
+    const { principal, rate, shortLoan, longLoan, emiDifference, extraInterestCost, loanBalanceAtShortEnd, userScenario, scenarios, timeline, swapped } = results;
     const shortY = shortLoan.tenureYears;
     const longY = longLoan.tenureYears;
-    const planBWins = userScenario.netBenefit > 0;
     const isTie = Math.abs(userScenario.netBenefit) < 1000;
-    const barMax = Math.max(userScenario.investmentValue, loanBalanceAtShortEnd, 1);
+    const planBWins = !isTie && userScenario.netBenefit > 0;
+    const status = isTie ? "tie" : planBWins ? "win" : "lose";
+    const months = shortY * 12;
+    const yearStep = shortY <= 6 ? 1 : shortY <= 15 ? 2 : 5;
+    const xTicks: number[] = [];
+    for (let yr = 0; yr <= shortY; yr += yearStep) xTicks.push(yr * 12);
+    if (xTicks[xTicks.length - 1] !== months) xTicks.push(months);
 
     return (
         <>
             {swapped && (
-                <div className="notice subtle" role="status">
-                    Your "shorter" period was longer than your "longer" one, so we swapped them for you.
+                <div className="notice info" role="status">
+                    Your shorter period was longer than your longer period, so the two have been swapped.
                 </div>
             )}
 
-            <section aria-labelledby="plans-title">
-                <h2 id="plans-title" className="section-title">Your two options</h2>
-                <div className="plans">
-                    <article className="card plan plan-a">
-                        <span className="tag">Plan A</span>
-                        <h3>Pay it off in {years(shortY)}</h3>
-                        <p className="plan-sub">Take the shorter loan and don't invest anything extra.</p>
-                        <dl>
-                            <div className="row big"><dt>Monthly EMI</dt><dd>{formatCurrency(shortLoan.emi)}</dd></div>
-                            <div className="row"><dt>Interest you'll pay</dt><dd>{formatCurrency(shortLoan.totalInterest)}</dd></div>
-                            <div className="row"><dt>Total you'll repay</dt><dd>{formatCurrency(shortLoan.totalPayment)}</dd></div>
-                        </dl>
-                    </article>
-
-                    <article className="card plan plan-b">
-                        <span className="tag">Plan B</span>
-                        <h3>Stretch to {years(longY)} and invest</h3>
-                        <p className="plan-sub">
-                            Take the longer loan and invest the {formatCurrency(emiDifference)} you save each month for the first {years(shortY)}.
-                        </p>
-                        <dl>
-                            <div className="row big"><dt>Monthly EMI</dt><dd>{formatCurrency(longLoan.emi)}</dd></div>
-                            <div className="row"><dt>Interest you'll pay</dt><dd>{formatCurrency(longLoan.totalInterest)}</dd></div>
-                            <div className="row"><dt>Total you'll repay</dt><dd>{formatCurrency(longLoan.totalPayment)}</dd></div>
-                        </dl>
-                    </article>
+            <section className={`card verdict ${status}`} aria-labelledby="verdict-title" aria-live="polite">
+                <div className="verdict-badge">
+                    <span className="verdict-icon" aria-hidden="true">{isTie ? "=" : planBWins ? "✓" : "!"}</span>
+                    {isTie ? "Roughly equal" : planBWins ? "Plan B is better" : "Plan A is better"}
                 </div>
-
-                <div className="facts">
-                    <div className="fact">
-                        <span className="fact-label">Plan B's lower EMI frees up</span>
-                        <span className="fact-value">{formatCurrency(emiDifference)}<small>/month</small></span>
-                    </div>
-                    <div className="fact">
-                        <span className="fact-label">But Plan B costs extra interest of</span>
-                        <span className="fact-value negative">{formatShort(extraInterestCost)}</span>
-                    </div>
+                <h2 id="verdict-title">
+                    {isTie ? (
+                        <>Both plans end up about the same</>
+                    ) : planBWins ? (
+                        <>Taking the {longY}-year loan and investing puts you <span className="hl">{formatShort(userScenario.netBenefit)}</span> ahead</>
+                    ) : (
+                        <>Paying off in {years(shortY)} saves you <span className="hl">{formatShort(-userScenario.netBenefit)}</span></>
+                    )}
+                </h2>
+                <p className="verdict-text">
+                    At a {userScenario.annualReturn}% return, after {years(shortY)} Plan B's investments are worth <strong>{formatShort(userScenario.investmentValue)}</strong> while
+                    its loan still has <strong>{formatShort(loanBalanceAtShortEnd)}</strong> left to repay. Plan A is debt-free by then.
+                    {planBWins && ` Selling the investments clears Plan B's loan with ${formatShort(userScenario.netBenefit)} to spare.`}
+                    {!planBWins && !isTie && ` Even after selling every investment, Plan B still owes ${formatShort(-userScenario.netBenefit)}.`}
+                </p>
+                <div className="breakeven">
+                    <span className="breakeven-label">Break-even return</span>
+                    <span className="breakeven-value">{parseFloat(rate.toFixed(2))}% a year</span>
+                    <span className="breakeven-note">Plan B only wins if your investments beat your loan rate after tax and fees.</span>
                 </div>
             </section>
 
-            <section className={`card verdict ${isTie ? "tie" : planBWins ? "win" : "lose"}`} aria-labelledby="verdict-title">
-                <p className="eyebrow">At your expected return of {userScenario.annualReturn}% a year</p>
-                <h2 id="verdict-title">
-                    {isTie
-                        ? "It's roughly a tie: both plans leave you in the same place."
-                        : planBWins
-                            ? `Plan B puts you about ${formatShort(userScenario.netBenefit)} ahead after ${years(shortY)}.`
-                            : `Plan A is better: Plan B would leave you ${formatShort(-userScenario.netBenefit)} worse off.`}
-                </h2>
-
-                <p className="verdict-explain">
-                    Both plans cost you the same {formatCurrency(shortLoan.emi)} every month for {years(shortY)}.
-                    After that, with <strong>Plan A</strong> your loan is fully paid off.
-                    With <strong>Plan B</strong> you'd have investments worth <strong>{formatShort(userScenario.investmentValue)}</strong>,
-                    but you'd still owe <strong>{formatShort(loanBalanceAtShortEnd)}</strong> on the loan.
-                </p>
-
-                <div className="bars" aria-hidden="true">
-                    <div className="bar-row">
-                        <span className="bar-label">Your investments</span>
-                        <div className="bar-track"><div className="bar invest" style={{ width: `${(userScenario.investmentValue / barMax) * 100}%` }} /></div>
-                        <span className="bar-value">{formatShort(userScenario.investmentValue)}</span>
-                    </div>
-                    <div className="bar-row">
-                        <span className="bar-label">Loan still owed</span>
-                        <div className="bar-track"><div className="bar owed" style={{ width: `${(loanBalanceAtShortEnd / barMax) * 100}%` }} /></div>
-                        <span className="bar-value">{formatShort(loanBalanceAtShortEnd)}</span>
-                    </div>
+            <section className="stats" aria-label="Key numbers">
+                <div className="stat">
+                    <span className="stat-label">EMI saved with Plan B</span>
+                    <span className="stat-value">{formatCurrency(emiDifference)}<small>/mo</small></span>
+                    <span className="stat-note">to invest for {years(shortY)}</span>
                 </div>
-
-                <p className="verdict-explain">
-                    {isTie
-                        ? "Selling your investments would roughly clear the loan exactly, so you'd end up where Plan A leaves you."
-                        : planBWins
-                            ? `If you sold your investments and cleared the loan, you'd be debt-free, just like Plan A, with about ${formatShort(userScenario.netBenefit)} left over.`
-                            : `Even after selling all your investments, you'd still owe about ${formatShort(-userScenario.netBenefit)} more than someone who chose Plan A.`}
-                </p>
-
-                <div className="rule-of-thumb">
-                    <strong>The simple rule:</strong> Plan B only wins if your investments earn <em>more than {rate}% a year</em> (your loan's
-                    interest rate) <em>after</em> taxes and fees.
+                <div className="stat">
+                    <span className="stat-label">Extra interest in Plan B</span>
+                    <span className="stat-value">{formatShort(extraInterestCost)}</span>
+                    <span className="stat-note">over the full {years(longY)}</span>
                 </div>
+                <div className="stat">
+                    <span className="stat-label">Plan B's investments</span>
+                    <span className="stat-value">{formatShort(userScenario.investmentValue)}</span>
+                    <span className="stat-note">after {years(shortY)} at {userScenario.annualReturn}%</span>
+                </div>
+            </section>
+
+            <section className="card" aria-labelledby="compare-title">
+                <h2 id="compare-title">The two options side by side</h2>
+                <div className="table-wrap">
+                    <table className="compare">
+                        <thead>
+                            <tr>
+                                <th scope="col"><span className="sr-only">Measure</span></th>
+                                <th scope="col">
+                                    <span className="plan-tag a">Plan A</span>
+                                    <span className="plan-name">Repay in {years(shortY)}</span>
+                                </th>
+                                <th scope="col">
+                                    <span className="plan-tag b">Plan B</span>
+                                    <span className="plan-name">Repay in {years(longY)} + invest</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <th scope="row">Monthly EMI</th>
+                                <td className="strong">{formatCurrency(shortLoan.emi)}</td>
+                                <td className="strong">{formatCurrency(longLoan.emi)}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Invested every month</th>
+                                <td>—</td>
+                                <td>{formatCurrency(emiDifference)} for {years(shortY)}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Total interest paid</th>
+                                <td>{formatCurrency(shortLoan.totalInterest)}</td>
+                                <td>{formatCurrency(longLoan.totalInterest)}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Total repaid to lender</th>
+                                <td>{formatCurrency(shortLoan.totalPayment)}</td>
+                                <td>{formatCurrency(longLoan.totalPayment)}</td>
+                            </tr>
+                            <tr className="total">
+                                <th scope="row">Position after {years(shortY)}</th>
+                                <td>Debt-free</td>
+                                <td>
+                                    {formatShort(userScenario.investmentValue)} invested, {formatShort(loanBalanceAtShortEnd)} still owed
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section className="card" aria-labelledby="race-title">
+                <h2 id="race-title">Plan B: investments vs. loan still owed</h2>
+                <p className="section-sub">
+                    How Plan B's investments grow while its loan shrinks, at {userScenario.annualReturn}% a year.
+                    {planBWins
+                        ? " The investments end up bigger than the loan, so they could pay it off."
+                        : " The investments don't catch up with the loan in time."}
+                </p>
+                <Legend items={[
+                    { name: "Investments", color: COLORS.invest, shape: 'line' },
+                    { name: "Loan still owed", color: COLORS.owed, shape: 'line' },
+                ]} />
+                <LineChart
+                    series={[
+                        { name: "Investments", color: COLORS.invest, values: timeline.invested },
+                        { name: "Loan still owed", color: COLORS.owed, values: timeline.owed },
+                    ]}
+                    xTicks={xTicks}
+                    xLabel={monthLabel}
+                    format={formatShort}
+                    formatAxis={formatAxis}
+                    ariaLabel={`Line chart. Over ${years(shortY)}, Plan B's investments grow to ${formatShort(userScenario.investmentValue)} while its loan falls from ${formatShort(principal)} to ${formatShort(loanBalanceAtShortEnd)}.`}
+                />
+            </section>
+
+            <section className="card" aria-labelledby="cost-title">
+                <h2 id="cost-title">Total repaid to the lender</h2>
+                <p className="section-sub">
+                    Plan B pays <strong>{formatShort(extraInterestCost)}</strong> more in interest. Its investments have to earn more than that for it to come out ahead.
+                </p>
+                <Legend items={[
+                    { name: "Loan amount", color: COLORS.principal, shape: 'rect' },
+                    { name: "Interest", color: COLORS.owed, shape: 'rect' },
+                ]} />
+                <StackedBars
+                    segments={[
+                        { name: "Loan amount", color: COLORS.principal },
+                        { name: "Interest", color: COLORS.owed },
+                    ]}
+                    rows={[
+                        { label: `Plan A · ${shortY} yrs`, values: [principal, shortLoan.totalInterest] },
+                        { label: `Plan B · ${longY} yrs`, values: [principal, longLoan.totalInterest] },
+                    ]}
+                    format={formatShort}
+                    ariaLabel={`Bar chart. Plan A repays ${formatShort(shortLoan.totalPayment)} including ${formatShort(shortLoan.totalInterest)} interest. Plan B repays ${formatShort(longLoan.totalPayment)} including ${formatShort(longLoan.totalInterest)} interest.`}
+                />
             </section>
 
             <section className="card" aria-labelledby="scenarios-title">
                 <h2 id="scenarios-title">What if returns are different?</h2>
                 <p className="section-sub">
-                    Where you'd stand after {years(shortY)} with Plan B, depending on how your investments actually do.
-                    You'd have put in {formatShort(userScenario.totalInvested)} in total.
+                    Plan B's position after {years(shortY)} at different yearly returns. You would invest {formatShort(userScenario.totalInvested)} in total, and {formatShort(loanBalanceAtShortEnd)} of the loan would still be owed.
                 </p>
                 <div className="table-wrap">
-                    <table>
+                    <table className="scenarios">
                         <thead>
                             <tr>
-                                <th scope="col">Yearly return</th>
-                                <th scope="col">Investments worth</th>
-                                <th scope="col">Loan still owed</th>
+                                <th scope="col">Return</th>
+                                <th scope="col">Investments</th>
+                                <th scope="col" className="col-owed">Loan owed</th>
                                 <th scope="col">Plan B vs Plan A</th>
                             </tr>
                         </thead>
@@ -403,14 +575,18 @@ const Results: React.FC<{ results: ComparisonData; rate: number }> = ({ results,
                                     <tr key={s.annualReturn} className={mine ? "mine" : undefined}>
                                         <td>
                                             {s.annualReturn}%
-                                            {mine && <span className="pill">your guess</span>}
+                                            {mine && <span className="pill">Your estimate</span>}
                                         </td>
                                         <td>{formatShort(s.investmentValue)}</td>
-                                        <td>{formatShort(s.loanBalance)}</td>
-                                        <td className={tie ? "" : s.netBenefit > 0 ? "positive" : "negative"}>
-                                            {tie ? "About the same" : s.netBenefit > 0
-                                                ? `${formatShort(s.netBenefit)} better`
-                                                : `${formatShort(-s.netBenefit)} worse`}
+                                        <td className="col-owed">{formatShort(s.loanBalance)}</td>
+                                        <td>
+                                            {tie ? (
+                                                <span className="delta neutral">About equal</span>
+                                            ) : s.netBenefit > 0 ? (
+                                                <span className="delta up">▲ {formatShort(s.netBenefit)} better</span>
+                                            ) : (
+                                                <span className="delta down">▼ {formatShort(-s.netBenefit)} worse</span>
+                                            )}
                                         </td>
                                     </tr>
                                 );
@@ -421,16 +597,13 @@ const Results: React.FC<{ results: ComparisonData; rate: number }> = ({ results,
             </section>
 
             <section className="card caveats" aria-labelledby="caveats-title">
-                <h2 id="caveats-title">Before you decide</h2>
+                <h2 id="caveats-title">Things to consider</h2>
                 <ul>
-                    <li><strong>Investments can go down.</strong> Markets don't grow smoothly. A bad year near the end can wipe out gains, while your loan interest is certain.</li>
-                    <li><strong>Taxes matter.</strong> Investment gains may be taxed, and some loans (like home loans) give you tax deductions on interest. Both change the break-even rate.</li>
-                    <li><strong>It needs discipline.</strong> Plan B only works if you actually invest the difference every month and don't spend it.</li>
-                    <li><strong>Flexibility has value.</strong> A lower EMI gives you breathing room if your income drops. Many loans also let you prepay later.</li>
+                    <li><strong>Market risk.</strong> Investments rise and fall. Your loan interest is certain; your returns are not.</li>
+                    <li><strong>Tax.</strong> Investment gains may be taxed, and some loans (such as home loans) offer tax benefits on interest.</li>
+                    <li><strong>Discipline.</strong> Plan B only works if you invest the EMI difference every month without fail.</li>
+                    <li><strong>Flexibility.</strong> A lower EMI gives breathing room if your income changes, and many loans allow prepayment later.</li>
                 </ul>
-                <p className="disclaimer">
-                    This is an estimate based on the numbers you entered, not financial advice. For a big decision, talk to a qualified financial advisor.
-                </p>
             </section>
         </>
     );
